@@ -52,34 +52,29 @@ class GAEOpenID(providers.AuthenticationProvider):
             # Phase 1 before redirect.
             #===================================================================
             self._log(logging.INFO, 'Starting OpenID authentication procedure.')
-            
+
             url = users.create_login_url(dest_url=self.url, federated_identity=self.identifier)
-            
-            self._log(logging.INFO, 'Redirecting user to {}.'.format(url))
-            
+
+            self._log(logging.INFO, f'Redirecting user to {url}.')
+
             self.redirect(url)
         else:
             #===================================================================
             # Phase 2 after redirect.
             #===================================================================
-            
+
             self._log(logging.INFO, 'Continuing OpenID authentication procedure after redirect.')
-            
-            user = users.get_current_user()
-            
-            if user:
+
+            if user := users.get_current_user():
                 self._log(logging.INFO, 'Authentication successful.')
                 self._log(logging.INFO, 'Creating user.')
                 self.user = core.User(self,
                                      id=user.federated_identity(),
                                      email=user.email(),
                                      gae_user=user)
-                
-                #===============================================================
-                # We're done
-                #===============================================================
+
             else:
-                raise FailureError('Unable to authenticate identifier "{}"!'.format(self.identifier))
+                raise FailureError(f'Unable to authenticate identifier "{self.identifier}"!')
 
 
 class Yahoo(GAEOpenID):

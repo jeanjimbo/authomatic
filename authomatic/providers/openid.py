@@ -120,9 +120,8 @@ class SessionOpenIDStore(object):
         age = int(time.time()) - int(timestamp)
         if age < self.nonce_timeout:
             return True
-        else:
-            self._log(logging.ERROR, 'SessionOpenIDStore: Expired nonce!')
-            return False
+        self._log(logging.ERROR, 'SessionOpenIDStore: Expired nonce!')
+        return False
 
 
 class OpenID(providers.AuthenticationProvider):
@@ -277,7 +276,7 @@ class OpenID(providers.AuthenticationProvider):
         # Instantiate consumer
         self.store._log = self._log
         oi_consumer = consumer.Consumer(self.session, self.store)
-        
+
         # handle realm and XRDS if there is only one query parameter
         if self.use_realm and len(self.params) == 1:
             realm_request = self.params.get(self.realm_param)
@@ -285,107 +284,111 @@ class OpenID(providers.AuthenticationProvider):
         else:
             realm_request = None
             xrds_request = None
-        
+
         # determine type of request
         if realm_request:
             #===================================================================
             # Realm HTML
             #===================================================================
-            
+
             self._log(logging.INFO, 'Writing OpenID realm HTML to the response.')
             xrds_location = '{u}?{x}={x}'.format(u=self.url, x=self.xrds_param)
             self.write(REALM_HTML.format(xrds_location=xrds_location, body=self.realm_body))
-            
+
         elif xrds_request:
             #===================================================================
             # XRDS XML
             #===================================================================
-            
+
             self._log(logging.INFO, 'Writing XRDS XML document to the response.')
             self.set_header('Content-Type', 'application/xrds+xml')
             self.write(XRDS_XML.format(return_to=self.url))
-        
+
         elif self.params.get('openid.mode'):
             #===================================================================
             # Phase 2 after redirect
             #===================================================================
-            
+
             self._log(logging.INFO, 'Continuing OpenID authentication procedure after redirect.')
-            
+
             # complete the authentication process
             response = oi_consumer.complete(self.params, self.url)            
-            
+
             # on success
             if response.status == consumer.SUCCESS:
                 
-                data = {}
-                
-                # get user ID
-                data['guid'] = response.getDisplayIdentifier()
+                data = {'guid': response.getDisplayIdentifier()}
 
                 self._log(logging.INFO, 'Authentication successful.')
-                
+
                 # get user data from AX response
                 ax_response = ax.FetchResponse.fromSuccessResponse(response)
                 if ax_response and ax_response.data:
                     self._log(logging.INFO, 'Got AX data.')
-                    ax_data = {}
-                    # convert iterable values to their first item
-                    for k, v in ax_response.data.iteritems():
-                        if v and type(v) in (list, tuple):
-                            ax_data[k] = v[0]
+                    ax_data = {
+                        k: v[0]
+                        for k, v in ax_response.data.iteritems()
+                        if v and type(v) in (list, tuple)
+                    }
                     data['ax'] = ax_data
-                
-                
+
+
                 # get user data from SREG response
                 sreg_response = sreg.SRegResponse.fromSuccessResponse(response)
                 if sreg_response and sreg_response.data:
                     self._log(logging.INFO, 'Got SREG data.')
                     data['sreg'] = sreg_response.data
-                                
-                
+
+
                 # get data from PAPE response
                 pape_response = pape.Response.fromSuccessResponse(response)
                 if pape_response and pape_response.auth_policies:
                     self._log(logging.INFO, 'Got PAPE data.')
                     data['pape'] = pape_response.auth_policies
-                
+
                 # create user
                 self._update_or_create_user(data)
-                
-                #===============================================================
-                # We're done!
-                #===============================================================
-            
+                        
+                        #===============================================================
+                        # We're done!
+                        #===============================================================
+
             elif response.status == consumer.CANCEL:
-                raise CancellationError('User cancelled the verification of ID "{}"!'.format(response.getDisplayIdentifier()))
-            
+                raise CancellationError(
+                    f'User cancelled the verification of ID "{response.getDisplayIdentifier()}"!'
+                )
+
             elif response.status == consumer.FAILURE:
                 raise FailureError(response.message)
-            
+
         elif self.identifier:  # As set in AuthenticationProvider.__init__
             #===================================================================
             # Phase 1 before redirect
             #===================================================================
-            
+
             self._log(logging.INFO, 'Starting OpenID authentication procedure.')
-            
+
             # get AuthRequest object
             try:
                 auth_request = oi_consumer.begin(self.identifier)
             except consumer.DiscoveryFailure as e:
-                raise FailureError('Discovery failed for identifier {}!'.format(self.identifier),
-                                   url=self.identifier,
-                                   original_message=e.message)
-            
-            self._log(logging.INFO, 'Service discovery for identifier {} successful.'.format(self.identifier))
-            
+                raise FailureError(
+                    f'Discovery failed for identifier {self.identifier}!',
+                    url=self.identifier,
+                    original_message=e.message,
+                )
+
+            self._log(
+                logging.INFO,
+                f'Service discovery for identifier {self.identifier} successful.',
+            )
+
             # add SREG extension
             # we need to remove required fields from optional fields because addExtension then raises an error
             self.sreg = [i for i in self.sreg if i not in self.sreg_required]
             auth_request.addExtension(sreg.SRegRequest(optional=self.sreg,
                                                        required=self.sreg_required))
-            
+
             # add AX extension
             ax_request = ax.FetchRequest()
             # set AX schemas
@@ -393,22 +396,22 @@ class OpenID(providers.AuthenticationProvider):
                 required = i in self.ax_required
                 ax_request.add(ax.AttrInfo(i, required=required))
             auth_request.addExtension(ax_request)
-            
+
             # add PAPE extension
             auth_request.addExtension(pape.Request(self.pape))           
-            
+
             # prepare realm and return_to URLs
             if self.use_realm:
                 realm = return_to = '{u}?{r}={r}'.format(u=self.url, r=self.realm_param)
             else:
                 realm = return_to = self.url
-                        
+
             url = auth_request.redirectURL(realm, return_to)
-            
+
             if auth_request.shouldSendRedirect():
                 # can be redirected
                 url = auth_request.redirectURL(realm, return_to)
-                self._log(logging.INFO, 'Redirecting user to {}.'.format(url))
+                self._log(logging.INFO, f'Redirecting user to {url}.')
                 self.redirect(url)
             else:
                 # must be sent as POST

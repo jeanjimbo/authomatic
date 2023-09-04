@@ -100,76 +100,74 @@ class OAuth2(providers.AuthorizationProvider):
         
         headers = headers or {}
         params = params or {}
-        
+
         consumer_key = credentials.consumer_key or ''
         consumer_secret = credentials.consumer_secret or ''
         token = credentials.token or ''
         refresh_token = credentials.refresh_token or credentials.token or ''
-        
+
         # Separate url base and query parameters.
         url, base_params = cls._split_url(url)
-                
+
         # Add params extracted from URL.
         params.update(dict(base_params))
-        
+
         if request_type == cls.USER_AUTHORIZATION_REQUEST_TYPE:
-            # User authorization request.
-            # TODO: Raise error for specific message for each missing argument.
-            if consumer_key and redirect_uri and (csrf or not cls.supports_csrf_protection):
-                params['client_id'] = consumer_key
-                params['redirect_uri'] = redirect_uri
-                params['scope'] = scope
-                params['state'] = csrf
-                params['response_type'] = 'code'
-                
-                # Add authorization header
-                headers.update(cls._authorization_header(credentials))
-            else:
+            if (
+                not consumer_key
+                or not redirect_uri
+                or not csrf
+                and cls.supports_csrf_protection
+            ):
                 raise OAuth2Error('Credentials with valid consumer_key and arguments redirect_uri, scope and ' + \
-                                  'state are required to create OAuth 2.0 user authorization request elements!')
-        
+                                      'state are required to create OAuth 2.0 user authorization request elements!')
+
+            params['client_id'] = consumer_key
+            params['redirect_uri'] = redirect_uri
+            params['scope'] = scope
+            params['state'] = csrf
+            params['response_type'] = 'code'
+
+            # Add authorization header
+            headers.update(cls._authorization_header(credentials))
         elif request_type == cls.ACCESS_TOKEN_REQUEST_TYPE:
-            # Access token request.
-            if consumer_key and consumer_secret:
-                params['code'] = token
-                params['client_id'] = consumer_key
-                params['client_secret'] = consumer_secret
-                params['redirect_uri'] = redirect_uri
-                params['grant_type'] = 'authorization_code'
-                
-                # TODO: Check whether all providers accept it
-                headers.update(cls._authorization_header(credentials))
-            else:
+            if not consumer_key or not consumer_secret:
                 raise OAuth2Error('Credentials with valid token, consumer_key, consumer_secret and argument ' + \
-                                  'redirect_uri are required to create OAuth 2.0 access token request elements!')
-        
+                                      'redirect_uri are required to create OAuth 2.0 access token request elements!')
+
+            params['code'] = token
+            params['client_id'] = consumer_key
+            params['client_secret'] = consumer_secret
+            params['redirect_uri'] = redirect_uri
+            params['grant_type'] = 'authorization_code'
+
+            # TODO: Check whether all providers accept it
+            headers.update(cls._authorization_header(credentials))
         elif request_type == cls.REFRESH_TOKEN_REQUEST_TYPE:
-            # Refresh access token request.
-            if refresh_token and consumer_key and consumer_secret:
-                params['refresh_token'] = refresh_token
-                params['client_id'] = consumer_key
-                params['client_secret'] = consumer_secret
-                params['grant_type'] = 'refresh_token'
-            else:
+            if not refresh_token or not consumer_key or not consumer_secret:
                 raise OAuth2Error('Credentials with valid refresh_token, consumer_key, consumer_secret ' + \
-                                  'are required to create OAuth 2.0 refresh token request elements!')
-        
+                                      'are required to create OAuth 2.0 refresh token request elements!')
+
+            params['refresh_token'] = refresh_token
+            params['client_id'] = consumer_key
+            params['client_secret'] = consumer_secret
+            params['grant_type'] = 'refresh_token'
         elif request_type == cls.PROTECTED_RESOURCE_REQUEST_TYPE:
             # Protected resource request.
-            
+
             # Add Authorization header. See: http://tools.ietf.org/html/rfc6749#section-7.1
             if credentials.token_type == cls.BEARER:
                 # http://tools.ietf.org/html/rfc6750#section-2.1
-                headers.update({'Authorization': 'Bearer {}'.format(credentials.token)})
-                
+                headers.update({'Authorization': f'Bearer {credentials.token}'})
+
             elif token:
                 params['access_token'] = token
             else:
                 raise OAuth2Error('Credentials with valid token are required to create ' + \
-                                  'OAuth 2.0 protected resources request elements!')
-        
+                                      'OAuth 2.0 protected resources request elements!')
+
         request_elements = core.RequestElements(url, method, params, headers, body)
-        
+
         return cls._x_request_elements_filter(request_type, request_elements, credentials)
     
     
@@ -275,43 +273,45 @@ class OAuth2(providers.AuthorizationProvider):
         error = self.params.get('error')
         error_message = self.params.get('error_message')
         state = self.params.get('state')      
-        
+
         if authorization_code or not self.user_authorization_url:
             
             if authorization_code:
                 #===================================================================
                 # Phase 2 after redirect with success
                 #===================================================================
-                
+
                 self._log(logging.INFO, 'Continuing OAuth 2.0 authorization procedure after redirect.')
-                
+
                 # validate CSRF token
                 if self.supports_csrf_protection:
                     self._log(logging.INFO, 'Validating request by comparing request state with stored state.')
                     stored_state = self._session_get('state')
-                    
+
                     if not stored_state:
                         raise FailureError('Unable to retrieve stored state!')
-                    elif not stored_state == state:
-                        raise FailureError('The returned state "{}" doesn\'t match with the stored state!'.format(state),
-                                           url=self.user_authorization_url)
+                    elif stored_state != state:
+                        raise FailureError(
+                            f"""The returned state "{state}" doesn\'t match with the stored state!""",
+                            url=self.user_authorization_url,
+                        )
                     self._log(logging.INFO, 'Request is valid.')
                 else:
                     self._log(logging.WARN, 'Skipping CSRF validation!')
-            
+
             elif not self.user_authorization_url:
                 #===================================================================
                 # Phase 1 without user authorization redirect.
                 #===================================================================
-                
+
                 self._log(logging.INFO, 'Starting OAuth 2.0 authorization procedure without ' + \
-                                        'user authorization redirect.')
-            
+                                            'user authorization redirect.')
+
             # exchange authorization code for access token by the provider
-            self._log(logging.INFO, 'Fetching access token from {}.'.format(self.access_token_url))
-            
+            self._log(logging.INFO, f'Fetching access token from {self.access_token_url}.')
+
             self.credentials.token = authorization_code
-            
+
             request_elements = self.create_request_elements(request_type=self.ACCESS_TOKEN_REQUEST_TYPE,
                                                              credentials=self.credentials,
                                                              url=self.access_token_url,
@@ -319,24 +319,25 @@ class OAuth2(providers.AuthorizationProvider):
                                                              redirect_uri=self.url,
                                                              params=self.access_token_params,
                                                              headers=self.access_token_headers)
-            
+
             response = self._fetch(*request_elements)
-            
+
             access_token = response.data.get('access_token', '')
             refresh_token = response.data.get('refresh_token', '')
-            
+
             if response.status != 200 or not access_token:
-                raise FailureError('Failed to obtain OAuth 2.0 access token from {}! HTTP status: {}, message: {}.'\
-                                  .format(self.access_token_url, response.status, response.content),
-                                  original_message=response.content,
-                                  status=response.status,
-                                  url=self.access_token_url)
-            
+                raise FailureError(
+                    f'Failed to obtain OAuth 2.0 access token from {self.access_token_url}! HTTP status: {response.status}, message: {response.content}.',
+                    original_message=response.content,
+                    status=response.status,
+                    url=self.access_token_url,
+                )
+
             self._log(logging.INFO, 'Got access token.')
-            
+
             if refresh_token:
                 self._log(logging.INFO, 'Got refresh access token.')
-            
+
             # OAuth 2.0 credentials need access_token, refresh_token, token_type and expire_in.
             self.credentials.token = access_token
             self.credentials.refresh_token = refresh_token
@@ -345,37 +346,37 @@ class OAuth2(providers.AuthorizationProvider):
             # sWe don't need these two guys anymore.
             self.credentials.consumer_key = ''
             self.credentials.consumer_secret = ''
-            
+
             # update credentials
             self.credentials = self._x_credentials_parser(self.credentials, response.data)            
-            
+
             # create user
             self._update_or_create_user(response.data, self.credentials)
-            
-            #===================================================================
-            # We're done!
-            #===================================================================
-            
+                
+                #===================================================================
+                # We're done!
+                #===================================================================
+
         elif error or error_message:
             #===================================================================
             # Phase 2 after redirect with error
             #===================================================================
-            
+
             error_reason = self.params.get('error_reason')
             error_description = self.params.get('error_description') or error_message
-            
+
             if error_reason == 'user_denied':
                 raise CancellationError(error_description, url=self.user_authorization_url)
             else:
                 raise FailureError(error_description, url=self.user_authorization_url)
-            
+
         elif not self.params:
             #===================================================================
             # Phase 1 before redirect
             #===================================================================
-            
+
             self._log(logging.INFO, 'Starting OAuth 2.0 authorization procedure.')
-            
+
             csrf = ''
             if self.supports_csrf_protection:
                 # generate csfr
@@ -384,7 +385,7 @@ class OAuth2(providers.AuthorizationProvider):
                 self._session_set('state', csrf)
             else:
                 self._log(logging.WARN, 'Provider doesn\'t support CSRF validation!')
-                        
+
             request_elements = self.create_request_elements(request_type=self.USER_AUTHORIZATION_REQUEST_TYPE,
                                                             credentials=self.credentials,
                                                             url=self.user_authorization_url,
@@ -392,9 +393,9 @@ class OAuth2(providers.AuthorizationProvider):
                                                             scope=self._x_scope_parser(self.scope),
                                                             csrf=csrf,
                                                             params=self.user_authorization_params)
-            
-            self._log(logging.INFO, 'Redirecting user to {}.'.format(request_elements.full_url))
-            
+
+            self._log(logging.INFO, f'Redirecting user to {request_elements.full_url}.')
+
             self.redirect(request_elements.full_url)
 
 
@@ -459,9 +460,9 @@ class Bitly(OAuth2):
     
     def __init__(self, *args, **kwargs):
         super(Bitly, self).__init__(*args, **kwargs)
-        
+
         if self.offline:
-            if not 'grant_type' in self.access_token_params:
+            if 'grant_type' not in self.access_token_params:
                 self.access_token_params['grant_type'] = 'refresh_token'
     
     @staticmethod
@@ -515,9 +516,9 @@ class DeviantART(OAuth2):
     
     def __init__(self, *args, **kwargs):
         super(DeviantART, self).__init__(*args, **kwargs)
-        
+
         if self.offline:
-            if not 'grant_type' in self.access_token_params:
+            if 'grant_type' not in self.access_token_params:
                 self.access_token_params['grant_type'] = 'refresh_token'
     
     
@@ -560,20 +561,20 @@ class Facebook(OAuth2):
     
     def __init__(self, *args, **kwargs):
         super(Facebook, self).__init__(*args, **kwargs)
-        
-        # Handle special Facebook requirements to be able to refresh the access token.
+
         if self.offline:
-            # Facebook needs an offline_access scope.
-            if not 'offline_access' in self.scope:
+            if 'offline_access' not in self.scope:
                 self.scope.append('offline_access')
-        
+
         if self.popup:
             self.user_authorization_url += '?display=popup'
     
     
     @staticmethod
     def _x_user_parser(user, data):
-        user.picture = 'http://graph.facebook.com/{}/picture?type=large'.format(data.get('username'))
+        user.picture = (
+            f"http://graph.facebook.com/{data.get('username')}/picture?type=large"
+        )
         return user
     
     
@@ -721,13 +722,13 @@ class Google(OAuth2):
     
     def __init__(self, *args, **kwargs):
         super(Google, self).__init__(*args, **kwargs)
-        
+
         # Handle special Google requirements to be able to refresh the access token.
         if self.offline:
-            if not 'access_type' in self.user_authorization_params:
+            if 'access_type' not in self.user_authorization_params:
                 # Google needs access_type=offline param in the user authorization request.
                 self.user_authorization_params['access_type'] = 'offline'
-            if not 'approval_prompt' in self.user_authorization_params:
+            if 'approval_prompt' not in self.user_authorization_params:
                 # And also approval_prompt=force.
                 self.user_authorization_params['approval_prompt'] = 'force'
     
@@ -853,9 +854,9 @@ class Reddit(OAuth2):
     
     def __init__(self, *args, **kwargs):
         super(Reddit, self).__init__(*args, **kwargs)
-        
+
         if self.offline:
-            if not 'duration' in self.user_authorization_params:
+            if 'duration' not in self.user_authorization_params:
                 # http://www.reddit.com/r/changelog/comments/11jab9/reddit_change_permanent_oauth_grants_using/
                 self.user_authorization_params['duration'] = 'permanent'
     
@@ -952,9 +953,9 @@ class VK(OAuth2):
     
     def __init__(self, *args, **kwargs):
         super(VK, self).__init__(*args, **kwargs)
-        
+
         if self.offline:
-            if not 'offline' in self.scope:
+            if 'offline' not in self.scope:
                 self.scope.append('offline')
     
     
@@ -991,9 +992,9 @@ class WindowsLive(OAuth2):
     
     def __init__(self, *args, **kwargs):
         super(WindowsLive, self).__init__(*args, **kwargs)
-        
+
         if self.offline:
-            if not 'wl.offline_access' in self.scope:
+            if 'wl.offline_access' not in self.scope:
                 self.scope.append('wl.offline_access')
     
     @classmethod

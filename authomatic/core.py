@@ -45,7 +45,10 @@ def normalize_dict(dict_):
     :returns:
         Normalized dictionary.
     """
-    return {k: v[0] if not type(v) is str and len(v) == 1 else v for k, v in dict_.items()}
+    return {
+        k: v[0] if type(v) is not str and len(v) == 1 else v
+        for k, v in dict_.items()
+    }
 
 
 def items_to_dict(items):
@@ -181,14 +184,13 @@ def resolve_provider_class(class_):
     :param class_name: :class:`string` or :class:`authomatic.providers.BaseProvider` subclass.
     """
 
-    if type(class_) in (str, unicode):
-        # prepare path for authomatic.providers package
-        path = '.'.join([__package__, 'providers', class_])
-
-        # try to import class by string from providers module or by fully qualified path
-        return import_string(class_, True) or import_string(path)
-    else:
+    if type(class_) not in (str, unicode):
         return class_
+    # prepare path for authomatic.providers package
+    path = '.'.join([__package__, 'providers', class_])
+
+    # try to import class by string from providers module or by fully qualified path
+    return import_string(class_, True) or import_string(path)
 
 
 def id_to_name(config, short_name):
@@ -205,9 +207,8 @@ def id_to_name(config, short_name):
     for k, v in config.items():
         if v.get('id') == short_name:
             return k
-            break
     else:
-        raise Exception('No provider with id={} found in the config!'.format(short_name))
+        raise Exception(f'No provider with id={short_name} found in the config!')
 
 
 class ReprMixin(object):
@@ -243,7 +244,7 @@ class ReprMixin(object):
         for k, v in self.__dict__.items():
 
             # ignore attributes with leading underscores and those listed in _repr_ignore
-            if v and not k.startswith('_') and not k in self._repr_ignore:
+            if v and not k.startswith('_') and k not in self._repr_ignore:
 
                 # replace sensitive values
                 if k in self._repr_sensitive:
@@ -252,15 +253,15 @@ class ReprMixin(object):
                 # if repr is too long
                 if len(repr(v)) > self._repr_length_limit:
                     # Truncate to ClassName(...)
-                    v = '{}(...)'.format(v.__class__.__name__)
+                    v = f'{v.__class__.__name__}(...)'
                 else:
                     v = repr(v)
 
-                args.append('{}={}'.format(k, v))
+                args.append(f'{k}={v}')
 
         args = ', '.join(args)
 
-        return '{}({})'.format(name, args)
+        return f'{name}({args})'
 
 
 class Future(threading.Thread):
@@ -359,7 +360,7 @@ class Session(object):
 
         # Work-around for issue #11, failure of WebKit-based browsers to accept
         # cookies set as part of a redirect response in some circumstances.
-        if not '.' in domain:
+        if '.' not in domain:
             template = '{name}={value}; Path={path}; HttpOnly{secure}{expires}'
         else:
             template = '{name}={value}; Domain={domain}; Path={path}; HttpOnly{secure}{expires}'
@@ -476,8 +477,8 @@ class Session(object):
         encoded, timestamp, signature = value.split('|')
 
         # Verify signature
-        if not signature == self._signature(self.name, encoded, timestamp):
-            raise SessionError('Invalid signature "{}"!'.format(signature))
+        if signature != self._signature(self.name, encoded, timestamp):
+            raise SessionError(f'Invalid signature "{signature}"!')
 
         # Verify timestamp
         if int(timestamp) < int(time.time()) - self.max_age:
@@ -779,7 +780,7 @@ class Credentials(ReprMixin):
 
         if hasattr(self.provider_class, 'refresh_credentials'):
             if force or self.expire_soon(soon):
-                logging.info('PROVIDER NAME: {}'.format(self.provider_name))
+                logging.info(f'PROVIDER NAME: {self.provider_name}')
                 return self.provider_class(self, None, self.provider_name).refresh_credentials(self)
 
 
@@ -1182,7 +1183,7 @@ class RequestElements(tuple):
         URL with query string.
         """
 
-        return self.url + '?' + self.query_string
+        return f'{self.url}?{self.query_string}'
 
     def to_json(self):
         return json.dumps(dict(url=self.url,
@@ -1246,8 +1247,8 @@ class Authomatic(object):
         self.debug = debug
         self.logging_level = logging_level
         self.prefix = prefix
-        self._logger = logging.getLogger(str(id(self)))
-        
+        self._logger = logging.getLogger(id(self))
+
         # Set logging level.
         self._logger.setLevel(logging_level)
     
@@ -1286,9 +1287,9 @@ class Authomatic(object):
             # retrieve required settings for current provider and raise exceptions if missing
             provider_settings = self.config.get(provider_name)
             if not provider_settings:
-                raise exceptions.ConfigError('Provider name "{}" not specified!'.format(provider_name))
-    
-            if not (session is None or session_saver is None):
+                raise exceptions.ConfigError(f'Provider name "{provider_name}" not specified!')
+
+            if session is not None and session_saver is not None:
                 session = session
                 session_saver = session_saver
             else:
@@ -1297,15 +1298,17 @@ class Authomatic(object):
                                    max_age=self.session_max_age,
                                    name=self.prefix,
                                    secure=self.secure_cookie)
-    
+
                 session_saver = session.save
-    
+
             # Resolve provider class.
             class_ = provider_settings.get('class_')
             if not class_:
-                raise exceptions.ConfigError('The "class_" key not specified in the config for provider {}!'.format(provider_name))
+                raise exceptions.ConfigError(
+                    f'The "class_" key not specified in the config for provider {provider_name}!'
+                )
             ProviderClass = resolve_provider_class(class_)
-    
+
             # instantiate provider class
             provider = ProviderClass(self,
                                      adapter=adapter,
@@ -1314,10 +1317,10 @@ class Authomatic(object):
                                      session=session,
                                      session_saver=session_saver,
                                      **kwargs)
-    
+
             # return login result
             return provider.login()
-    
+
         else:
             # Act like backend.
             self.backend(adapter)
@@ -1365,18 +1368,18 @@ class Authomatic(object):
         :returns:
             :class:`.Response`
         """
-    
+
         # Deserialize credentials.
         credentials = Credentials.deserialize(self.config, credentials)
-    
+
         # Resolve provider class.
         ProviderClass = credentials.provider_class
-        logging.info('ACCESS HEADERS: {}'.format(headers))
+        logging.info(f'ACCESS HEADERS: {headers}')
         # Access resource and return response.
-        
+
         provider = ProviderClass(self, adapter=None, provider_name=credentials.provider_name)
         provider.credentials = credentials
-        
+
         return provider.access(url=url,
                                params=params,
                                method=method,
@@ -1467,26 +1470,26 @@ class Authomatic(object):
         :returns:
             :class:`.RequestElements` or JSON string.
         """
-    
+
         # Parse values from JSON
         if json_input:
             parsed_input = json.loads(json_input)
-    
+
             credentials = parsed_input.get('credentials', credentials)
             url = parsed_input.get('url', url)
             method = parsed_input.get('method', method)
             params = parsed_input.get('params', params)
             headers = parsed_input.get('headers', headers)
             body = parsed_input.get('body', body)
-    
+
         if not credentials and url:
             raise RequestElementsError('To create request elements, you must provide credentials ' +\
-                                        'and URL either as keyword arguments or in the JSON object!')
-    
+                                            'and URL either as keyword arguments or in the JSON object!')
+
         # Get the provider class
         credentials = Credentials.deserialize(self.config, credentials)
         ProviderClass = credentials.provider_class
-    
+
         # Create request elements
         request_elements = ProviderClass.create_request_elements(ProviderClass.PROTECTED_RESOURCE_REQUEST_TYPE,
                                                                  credentials=credentials,
@@ -1495,12 +1498,8 @@ class Authomatic(object):
                                                                  params=params,
                                                                  headers=headers,
                                                                  body=body)
-    
-        if return_json:
-            return request_elements.to_json()
-    
-        else:
-            return request_elements
+
+        return request_elements.to_json() if return_json else request_elements
     
     
     def backend(self, adapter):
@@ -1582,9 +1581,9 @@ class Authomatic(object):
     
             The backend will not work if you write anything to the response in the handler!
         """
-    
+
         AUTHOMATIC_HEADER = 'Authomatic-Response-To'
-    
+
         # Collect request params
         request_type = adapter.params.get('type', 'auto')
         json_input = adapter.params.get('json')
@@ -1592,20 +1591,20 @@ class Authomatic(object):
         url = adapter.params.get('url')
         method = adapter.params.get('method', 'GET')
         body = adapter.params.get('body', '')
-    
-    
+
+
         params = adapter.params.get('params')
         params = json.loads(params) if params else {}
-    
+
         headers = adapter.params.get('headers')
         headers = json.loads(headers) if headers else {}
-    
+
         ProviderClass = Credentials.deserialize(self.config, credentials).provider_class
-    
+
         if request_type == 'auto':
             # If there is a "callback" param, it's a JSONP request.
             jsonp = params.get('callback')
-    
+
             # JSONP is possible only with GET method.
             if ProviderClass.supports_jsonp and method is 'GET':
                 request_type = 'elements'
@@ -1614,20 +1613,20 @@ class Authomatic(object):
                 if params.get('callback'):
                     params.pop('callback')
                 request_type = 'fetch'
-    
+
         if request_type == 'fetch':
             # Access protected resource
             response = self.access(credentials, url, params, method, headers, body)
             result = response.content
-    
+
             # Forward status
-            adapter.status = str(response.status) + ' ' + str(response.reason)
-    
+            adapter.status = f'{str(response.status)} {str(response.reason)}'
+
             # Forward headers
             for k, v in response.getheaders():
-                logging.info('    {}: {}'.format(k, v))
+                logging.info(f'    {k}: {v}')
                 adapter.set_header(k, v)
-    
+
         elif request_type == 'elements':
             # Create request elements
             if json_input:
@@ -1640,15 +1639,15 @@ class Authomatic(object):
                                           headers=headers,
                                           body=body,
                                           return_json=True)
-    
+
             adapter.set_header('Content-Type', 'application/json')
         else:
             result = '{"error": "Bad Request!"}'
-    
-    
+
+
         # Add the authomatic header
         adapter.set_header(AUTHOMATIC_HEADER, request_type)
-    
+
         # Write result to response
         adapter.write(result)
     

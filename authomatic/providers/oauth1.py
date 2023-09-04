@@ -176,13 +176,11 @@ class HMACSHA1SignatureGenerator(BaseSignatureGenerator):
         
         base_string = _create_base_string(method, base, params)
         key = cls._create_key(consumer_secret, token_secret)
-        
+
         hashed = hmac.new(key, base_string, hashlib.sha1)
-        
-        
-        base64_encoded = binascii.b2a_base64(hashed.digest())[:-1]
-        
-        return base64_encoded
+
+
+        return binascii.b2a_base64(hashed.digest())[:-1]
 
 
 class PLAINTEXTSignatureGenerator(BaseSignatureGenerator):
@@ -265,18 +263,18 @@ class OAuth1(providers.AuthorizationProvider):
         
         params = params or {}
         headers = headers or {}
-        
+
         consumer_key = credentials.consumer_key or ''
         consumer_secret = credentials.consumer_secret or ''
         token = credentials.token or ''
         token_secret = credentials.token_secret or ''
-        
+
         # separate url base and query parameters
         url, base_params = cls._split_url(url)
-        
+
         # add extracted params to future params
         params.update(dict(base_params))
-        
+
         if request_type == cls.USER_AUTHORIZATION_REQUEST_TYPE:
             # no need for signature
             if token:
@@ -286,14 +284,12 @@ class OAuth1(providers.AuthorizationProvider):
         else:
             # signature needed
             if request_type == cls.REQUEST_TOKEN_REQUEST_TYPE:
-                # Request Token URL
-                if consumer_key and consumer_secret and callback:
-                    params['oauth_consumer_key'] = consumer_key
-                    params['oauth_callback'] = callback
-                else:
+                if not consumer_key or not consumer_secret or not callback:
                     raise OAuth1Error('Credentials with valid consumer_key, consumer_secret and ' +\
-                                                             'callback are required to create Request Token URL!')
-                
+                                                                 'callback are required to create Request Token URL!')
+
+                params['oauth_consumer_key'] = consumer_key
+                params['oauth_callback'] = callback
             elif request_type == cls.ACCESS_TOKEN_REQUEST_TYPE:
                 # Access Token URL
                 if consumer_key and consumer_secret and token and verifier:
@@ -302,8 +298,8 @@ class OAuth1(providers.AuthorizationProvider):
                     params['oauth_verifier'] = verifier
                 else:
                     raise OAuth1Error('Credentials with valid consumer_key, consumer_secret, token ' +\
-                                                             'and argument verifier are required to create Access Token URL!')
-                
+                                                                 'and argument verifier are required to create Access Token URL!')
+
             elif request_type == cls.PROTECTED_RESOURCE_REQUEST_TYPE:
                 # Protected Resources URL
                 if consumer_key and consumer_secret and token and token_secret:
@@ -311,23 +307,23 @@ class OAuth1(providers.AuthorizationProvider):
                     params['oauth_consumer_key'] = consumer_key
                 else:
                     raise OAuth1Error('Credentials with valid consumer_key, consumer_secret, token and ' +\
-                                                             'token_secret are required to create Protected Resources URL!')
-            
+                                                                 'token_secret are required to create Protected Resources URL!')
+
             # Sign request.
             # http://oauth.net/core/1.0a/#anchor13
-            
+
             # Prepare parameters for signature base string
             # http://oauth.net/core/1.0a/#rfc.section.9.1
             params['oauth_signature_method'] = cls._signature_generator.method
             params['oauth_timestamp'] = str(int(time.time()))
             params['oauth_nonce'] = cls.csrf_generator(uuid.uuid4())
             params['oauth_version'] = '1.0'
-            
+
             # add signature to params
             params['oauth_signature'] = cls._signature_generator.create_signature(method, url, params, consumer_secret, token_secret)
-        
+
         request_elements = core.RequestElements(url, method, params, headers, body)
-        
+
         return cls._x_request_elements_filter(request_type, request_elements, credentials)
     
     
@@ -360,107 +356,115 @@ class OAuth1(providers.AuthorizationProvider):
         denied = self.params.get('denied')
         verifier = self.params.get('oauth_verifier', '')
         request_token = self.params.get('oauth_token', '')
-        
+
         if request_token and verifier:
             # Phase 2 after redirect with success
             self._log(logging.INFO, 'Continuing OAuth 1.0a authorization procedure after redirect.')
             token_secret = self._session_get('token_secret')
             if not token_secret:
                 raise FailureError('Unable to retrieve token secret from storage!')
-            
-            # Get Access Token          
-            self._log(logging.INFO, 'Fetching for access token from {}.'.format(self.access_token_url))
-            
+
+            # Get Access Token
+            self._log(
+                logging.INFO,
+                f'Fetching for access token from {self.access_token_url}.',
+            )
+
             self.credentials.token = request_token
             self.credentials.token_secret = token_secret
-            
+
             request_elements = self.create_request_elements(request_type=self.ACCESS_TOKEN_REQUEST_TYPE,
                                                              url=self.access_token_url,
                                                              credentials=self.credentials,
                                                              verifier=verifier,
                                                              params=self.access_token_params)
-            
+
             response = self._fetch(*request_elements)
-            
+
             if response.status != 200:
-                raise FailureError('Failed to obtain OAuth 1.0a  oauth_token from {}! HTTP status code: {}.'\
-                                   .format(self.access_token_url, response.status),
-                                   original_message=response.content,
-                                   status=response.status,
-                                   url=self.access_token_url)
-            
+                raise FailureError(
+                    f'Failed to obtain OAuth 1.0a  oauth_token from {self.access_token_url}! HTTP status code: {response.status}.',
+                    original_message=response.content,
+                    status=response.status,
+                    url=self.access_token_url,
+                )
+
             self._log(logging.INFO, 'Got access token.')
-            
+
             self.credentials.token = response.data.get('oauth_token', '')
             self.credentials.token_secret = response.data.get('oauth_token_secret', '')
-            
+
             self.credentials = self._x_credentials_parser(self.credentials, response.data)
-            
+
             self._update_or_create_user(response.data, self.credentials)
-            
-            #===================================================================
-            # We're done!
-            #===================================================================
-            
+                
+                #===================================================================
+                # We're done!
+                #===================================================================
+
         elif denied:
             # Phase 2 after redirect denied
-            raise CancellationError('User denied the request token {} during a redirect to {}!'.\
-                                  format(denied, self.user_authorization_url),
-                                  original_message=denied,
-                                  url=self.user_authorization_url)
+            raise CancellationError(
+                f'User denied the request token {denied} during a redirect to {self.user_authorization_url}!',
+                original_message=denied,
+                url=self.user_authorization_url,
+            )
         else:
             # Phase 1 before redirect
             self._log(logging.INFO, 'Starting OAuth 1.0a authorization procedure.')
-            
+
             # Fetch for request token
             request_elements = self.create_request_elements(request_type=self.REQUEST_TOKEN_REQUEST_TYPE,
                                                              credentials=self.credentials,
                                                              url=self.request_token_url,
                                                              callback=self.url,
                                                              params=self.request_token_params)
-            
+
             self._log(logging.INFO, 'Fetching for request token and token secret.')
             response = self._fetch(*request_elements)
-            
+
             # check if response status is OK
             if response.status != 200:
-                raise FailureError('Failed to obtain request token from {}! HTTP status code: {} content: {}'\
-                                  .format(self.request_token_url, response.status, response.content),
-                                  original_message=response.content,
-                                  status=response.status,
-                                  url=self.request_token_url)
-            
+                raise FailureError(
+                    f'Failed to obtain request token from {self.request_token_url}! HTTP status code: {response.status} content: {response.content}',
+                    original_message=response.content,
+                    status=response.status,
+                    url=self.request_token_url,
+                )
+
             # extract request token
             request_token = response.data.get('oauth_token')
             if not request_token:
-                raise FailureError('Response from {} doesn\'t contain oauth_token parameter!'.format(self.request_token_url),
-                                  original_message=response.content,
-                                  url=self.request_token_url)
-            
+                raise FailureError(
+                    f"Response from {self.request_token_url} doesn\'t contain oauth_token parameter!",
+                    original_message=response.content,
+                    url=self.request_token_url,
+                )
+
             # we need request token for user authorization redirect
             self.credentials.token = request_token
-                        
-            # extract token secret and save it to storage
-            token_secret = response.data.get('oauth_token_secret')
-            if token_secret:
+
+            if token_secret := response.data.get('oauth_token_secret'):
                 # we need token secret after user authorization redirect to get access token
                 self._session_set('token_secret', token_secret)
             else:
-                raise FailureError('Failed to obtain token secret from {}!'.format(self.request_token_url),
-                                  original_message=response.content,
-                                  url=self.request_token_url)
-            
-            
+                raise FailureError(
+                    f'Failed to obtain token secret from {self.request_token_url}!',
+                    original_message=response.content,
+                    url=self.request_token_url,
+                )
+                        
+
             self._log(logging.INFO, 'Got request token and token secret')
-            
+
             # Create User Authorization URL
             request_elements = self.create_request_elements(request_type=self.USER_AUTHORIZATION_REQUEST_TYPE,
                                                              credentials=self.credentials,
                                                              url=self.user_authorization_url,
                                                              params=self.user_authorization_params)
-            
-            self._log(logging.INFO, 'Redirecting user to {}.'.format(request_elements.full_url))
-            
+
+            self._log(logging.INFO, f'Redirecting user to {request_elements.full_url}.')
+
             self.redirect(request_elements.full_url)
 
 
@@ -568,7 +572,7 @@ class Plurk(OAuth1):
     def _x_user_parser(user, data):
         
         _user = data.get('user_info', {})
-        
+
         user.locale = _user.get('default_lang')
         user.username = _user.get('display_name')
         user.id = _user.get('id') or _user.get('uid')
@@ -576,17 +580,17 @@ class Plurk(OAuth1):
         user.name = _user.get('full_name')
         user.gender = _user.get('gender')
         user.timezone = _user.get('timezone')
-        user.picture = 'http://avatars.plurk.com/{}-big2.jpg'.format(user.id)
-        
+        user.picture = f'http://avatars.plurk.com/{user.id}-big2.jpg'
+
         user.city, user.country = _user.get('location', ',').split(',')
         user.city = user.city.strip()
         user.country = user.country.strip()
-        
+
         try:
             user.birth_date = datetime.datetime.strptime(_user.get('date_of_birth'), "%a, %d %b %Y %H:%M:%S %Z")
         except:
             user.birth_date = data.get('date_of_birth')
-        
+
         return user
 
 
@@ -635,14 +639,14 @@ class Tumblr(OAuth1):
     @staticmethod
     def _x_user_parser(user, data):
         _user = data.get('response', {}).get('user', {})
-        
+
         user.username = user.id = _user.get('name')
         user.link = _user.get('blogs', [{}])[0].get('url')
-        
+
         if user.link:
             _host = urlparse.urlsplit(user.link).netloc
-            user.picture = 'http://api.tumblr.com/v2/blog/{}/avatar/512'.format(_host)
-        
+            user.picture = f'http://api.tumblr.com/v2/blog/{_host}/avatar/512'
+
         return user
 
 
@@ -693,10 +697,12 @@ class Vimeo(OAuth1):
         user.name = _user.get('display_name')
         user.id = _user.get('id')
         user.username = _user.get('username')
-        
+
         # Vimeo needs user ID to get rich info so we need to make one more fetch.
         if user.id:
-            response = user.provider.access('http://vimeo.com/api/v2/{}/info.json'.format(user.username))
+            response = user.provider.access(
+                f'http://vimeo.com/api/v2/{user.username}/info.json'
+            )
             if response and response.status == 200:
                 user.name = response.data.get('display_name')
                 user.city, user.country = response.data.get('location', ',').split(',')
@@ -704,7 +710,7 @@ class Vimeo(OAuth1):
                 user.country = user.country.strip()
                 user.link = response.data.get('profile_url')
                 user.picture = response.data.get('portrait_huge')
-        
+
         return user
 
 
@@ -764,12 +770,12 @@ class Yahoo(OAuth1):
     def _x_user_parser(user, data):
         
         _user = data.get('query', {}).get('results', {}).get('profile', {})
-        
+
         user.id = _user.get('guid')
         user.gender = _user.get('gender')
         user.nickname = _user.get('nickname')
         user.link = _user.get('profileUrl')
-        
+
         emails = _user.get('emails')
         if isinstance(emails, list):
             for email in emails:
@@ -777,23 +783,23 @@ class Yahoo(OAuth1):
                     user.email = email.get('handle')
         elif isinstance(emails, dict):
             user.email = emails.get('handle')
-        
+
         user.picture = _user.get('image', {}).get('imageUrl')
-        
+
         user.city, user.country = _user.get('location', ',').split(',')
         user.city = user.city.strip()
         user.country = user.country.strip()
-        
+
         _date = _user.get('birthdate')
         _year = _user.get('birthYear')
-        
+
         if _date and _year:
-            _full = _date + '/' + _year
+            _full = f'{_date}/{_year}'
             try:
                 user.birth_date = datetime.datetime.strptime(_full, "%m/%d/%Y")
             except:
                 user.birth_date = _full
-        
+
         return user
 
 

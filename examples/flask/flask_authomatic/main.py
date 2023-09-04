@@ -33,15 +33,14 @@ fa = FlaskAuthomatic(
 @app.route('/')
 @fa.login('fb')
 def index():
-    if fa.result:
-        if fa.result.error:
-            return fa.result.error.message
-        elif fa.result.user:
-            if not (fa.result.user.name and fa.result.user.id):
-                fa.result.user.update()
-            return jsonify(name=fa.result.user.name, id=fa.result.user.id)
-    else:
+    if not fa.result:
         return fa.response
+    if fa.result.error:
+        return fa.result.error.message
+    elif fa.result.user:
+        if not fa.result.user.name or not fa.result.user.id:
+            fa.result.user.update()
+        return jsonify(name=fa.result.user.name, id=fa.result.user.id)
 
 
 if __name__ == '__main__':

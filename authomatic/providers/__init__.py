@@ -223,7 +223,7 @@ class BaseProvider(object):
             :class:`str` The full dotted path to base class e.g. :literal:`"authomatic.providers.oauth2.OAuth2"`. 
         """
         
-        return cls.__module__ + '.' + cls.__bases__[0].__name__
+        return f'{cls.__module__}.{cls.__bases__[0].__name__}'
     
     
     def update_user(self):
@@ -277,7 +277,7 @@ class BaseProvider(object):
             e.g. ``"authomatic:facebook:key"``
         """
         
-        return '{}:{}:{}'.format(self.settings.prefix, self.name, key)
+        return f'{self.settings.prefix}:{self.name}:{key}'
     
     
     def _session_set(self, key, value):
@@ -357,74 +357,74 @@ class BaseProvider(object):
         
         params = params or {}
         params.update(self.access_params)
-        
+
         headers = headers or {}
         headers.update(self.access_headers)
-        
+
         scheme, host, path, query, fragment = urlparse.urlsplit(url)
         query = urllib.urlencode(params)
-        
+
         if method in ('POST', 'PUT', 'PATCH'):
             if not body:
                 # Put querystring to body
                 body = query
                 query = None
                 headers.update({'Content-Type': 'application/x-www-form-urlencoded'})
-        
+
         request_path = urlparse.urlunsplit((None, None, path, query, None))
-        
-        self._log(logging.DEBUG, u' \u251C\u2500 host: {}'.format(host))
-        self._log(logging.DEBUG, u' \u251C\u2500 path: {}'.format(request_path))
-        self._log(logging.DEBUG, u' \u251C\u2500 method: {}'.format(method))
-        self._log(logging.DEBUG, u' \u251C\u2500 body: {}'.format(body))
-        self._log(logging.DEBUG, u' \u251C\u2500 params: {}'.format(params))
-        self._log(logging.DEBUG, u' \u2514\u2500 headers: {}'.format(headers))
-        
+
+        self._log(logging.DEBUG, f' \u251C\u2500 host: {host}')
+        self._log(logging.DEBUG, f' \u251C\u2500 path: {request_path}')
+        self._log(logging.DEBUG, f' \u251C\u2500 method: {method}')
+        self._log(logging.DEBUG, f' \u251C\u2500 body: {body}')
+        self._log(logging.DEBUG, f' \u251C\u2500 params: {params}')
+        self._log(logging.DEBUG, f' \u2514\u2500 headers: {headers}')
+
         # Connect
         if scheme.lower() == 'https':
             connection = httplib.HTTPSConnection(host)
         else:
             connection = httplib.HTTPConnection(host)
-            
+
         try:
             connection.request(method, request_path, body, headers)
         except Exception as e:
             raise FetchError('Could not connect!',
                              original_message=e.message,
                              url=request_path)
-        
+
         response = connection.getresponse()
         location = response.getheader('Location')
-        
+
         if response.status in (300, 301, 302, 303, 307) and location:
             if location == url:
                 raise FetchError('Url redirects to itself!',
                                  url=location,
                                  status=response.status)
-                
+
             elif max_redirects > 0:
                 remaining_redirects = max_redirects - 1
-                
-                self._log(logging.DEBUG, 'Redirecting to {}'.format(url))
+
+                self._log(logging.DEBUG, f'Redirecting to {url}')
                 self._log(logging.DEBUG, 'Remaining redirects: '.format(remaining_redirects))
-                
+
                 # Call this method again.
                 response = self._fetch(url=location,
                                       params=params,
                                       method=method,
                                       headers=headers,
                                       max_redirects=remaining_redirects)
-                
+
             else:
                 raise FetchError('Max redirects reached!',
                                  url=location,
                                  status=response.status)
         else:
             self._log(logging.DEBUG, u'Got response:')
-            self._log(logging.DEBUG, u' \u251C\u2500 url: {}'.format(url))
-            self._log(logging.DEBUG, u' \u251C\u2500 status: {}'.format(response.status))
-            self._log(logging.DEBUG, u' \u2514\u2500 headers: {}'.format(response.getheaders()))
-                
+            self._log(logging.DEBUG, f' \u251C\u2500 url: {url}')
+            self._log(logging.DEBUG, f' \u251C\u2500 status: {response.status}')
+            self._log(logging.DEBUG, f' \u2514\u2500 headers: {response.getheaders()}')
+
         return authomatic.core.Response(response, content_parser)
     
     
@@ -438,26 +438,23 @@ class BaseProvider(object):
         
         if not self.user:
             self.user = authomatic.core.User(self, credentials=credentials)
-        
+
         self.user.content = content
         self.user.data = data
-        
+
         # Update.
         for key in self.user.__dict__.keys():
             # Exclude data.
             if key not in ('data', 'content'):
-                # Extract every data item whose key matches the user property name,
-                # but only if it has a value.
-                value = data.get(key)
-                if value:
+                if value := data.get(key):
                     setattr(self.user, key, value)
-        
+
         # Handle different structure of data by different providers.
         self.user = self._x_user_parser(self.user, data)
-        
+
         if self.user.id:
             self.user.id = str(self.user.id)
-        
+
         # TODO: Move to User
         # If there is no user.name,
         if not self.user.name:
@@ -467,7 +464,7 @@ class BaseProvider(object):
             else:
                 # Or use one of these.
                 self.user.name = self.user.username or self.user.nickname or self.user.first_name or self.user.last_name
-        
+
         return self.user    
     
     
@@ -683,8 +680,8 @@ class AuthorizationProvider(BaseProvider):
         
         cls = self.__class__
         mod = sys.modules.get(cls.__module__)
-        
-        return str(self.PROVIDER_TYPE_ID) + '-' + str(mod.PROVIDER_ID_MAP.index(cls))
+
+        return f'{str(self.PROVIDER_TYPE_ID)}-{str(mod.PROVIDER_ID_MAP.index(cls))}'
     
     
     def access(self, url, params=None, method='GET', headers=None,
@@ -719,11 +716,11 @@ class AuthorizationProvider(BaseProvider):
         
         if not self.user and not self.credentials:
             raise CredentialsError('There is no authenticated user!')
-        
+
         headers = headers or {}
-        
-        self._log(logging.INFO, 'Accessing protected resource {}.'.format(url))
-        
+
+        self._log(logging.INFO, f'Accessing protected resource {url}.')
+
         request_elements = self.create_request_elements(request_type=self.PROTECTED_RESOURCE_REQUEST_TYPE,
                                                         credentials=self.credentials,
                                                         url=url,
@@ -731,12 +728,12 @@ class AuthorizationProvider(BaseProvider):
                                                         params=params,
                                                         headers=headers,
                                                         method=method)
-        
+
         response = self._fetch(*request_elements,
                               max_redirects=max_redirects,
                               content_parser=content_parser)
-        
-        self._log(logging.INFO, 'Got response. HTTP status = {}.'.format(response.status))
+
+        self._log(logging.INFO, f'Got response. HTTP status = {response.status}.')
         return response
 
 
@@ -789,7 +786,7 @@ class AuthorizationProvider(BaseProvider):
         if cls._x_use_authorization_header:
             res = ':'.join((credentials.consumer_key, credentials.consumer_secret))
             res = base64.b64encode(res)
-            return {'Authorization': 'Basic {}'.format(res)}
+            return {'Authorization': f'Basic {res}'}
         else:
             return {}
     
@@ -800,10 +797,10 @@ class AuthorizationProvider(BaseProvider):
         """
         
         if not self.consumer.key:
-            raise ConfigError('Consumer key not specified for provider {}!'.format(self.name))
-        
+            raise ConfigError(f'Consumer key not specified for provider {self.name}!')
+
         if not self.consumer.secret:
-            raise ConfigError('Consumer secret not specified for provider {}!'.format(self.name))
+            raise ConfigError(f'Consumer secret not specified for provider {self.name}!')
     
     
     @staticmethod

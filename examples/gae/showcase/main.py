@@ -49,16 +49,15 @@ class Home(BaseHandler):
 
 class Login(BaseHandler):
     def any(self, provider_name):
-        result = authomatic.login(Webapp2Adapter(self), provider_name)
-        if result:
+        if result := authomatic.login(Webapp2Adapter(self), provider_name):
             apis = []
             if result.user:
                 result.user.update()
                 if result.user.credentials:
                     apis = config.config.get(provider_name, {}).get('_apis', {})
-            
+
             nice_provider_name = config.config.get(provider_name, {}).get('_name') or provider_name.capitalize()
-            
+
             render(self, result, result.popup_js(custom=dict(apis=apis, provider_name=nice_provider_name)))
 
 

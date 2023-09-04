@@ -66,15 +66,14 @@ class Webapp2Session(interfaces.BaseSession):
         """
         
         self.handler = handler
-        
+
         if session is None:
             if not secret:
                 raise GAEError('Either session or secret must be specified!')
-            else:
-                # Create new session.
-                cfg = config or dict(secret_key=secret, cookie_name=cookie_name)
-                session_store = sessions.SessionStore(handler.request, cfg)
-                self.session_dict = session_store.get_session(backend=backend)
+            # Create new session.
+            cfg = config or dict(secret_key=secret, cookie_name=cookie_name)
+            session_store = sessions.SessionStore(handler.request, cfg)
+            self.session_dict = session_store.get_session(backend=backend)
         else:
             # Use supplied session.
             self.session_dict = session
@@ -137,26 +136,21 @@ class NDBConfig(ndb.Model):
             A configuration dictionary for specified provider.
         """
         
-        # Query datastore.
-        result = cls.query(cls.provider_name == key).get()
-        
-        if result:
-            result_dict = result.to_dict()
-            
-            # Use NDBOpenIDStore by default
-            result_dict['store'] = NDBOpenIDStore
-            
-            # Convert coma-separated values to list. Currently only scope is csv.
-            for i in ('scope', ):
-                prop = result_dict.get(i)
-                if prop:
-                    result_dict[i] = [s.strip() for s in prop.split(',')]
-                else:
-                    result_dict[i] = None
-
-            return result_dict
-        else:
+        if not (result := cls.query(cls.provider_name == key).get()):
             return default
+        result_dict = result.to_dict()
+
+        # Use NDBOpenIDStore by default
+        result_dict['store'] = NDBOpenIDStore
+
+            # Convert coma-separated values to list. Currently only scope is csv.
+        for i in ('scope', ):
+            result_dict[i] = (
+                [s.strip() for s in prop.split(',')]
+                if (prop := result_dict.get(i))
+                else None
+            )
+        return result_dict
     
     
     @classmethod

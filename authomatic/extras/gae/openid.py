@@ -93,11 +93,9 @@ class NDBOpenIDStore(ndb.Expando, openid.store.interface.OpenIDStore):
         
         # check whether there is already an entity with the same ancestor path in the datastore
         key = ndb.Key('ServerUrl', str(server_url) or 'x', 'TimeStamp', str(timestamp), cls, str(salt))
-        
+
         cls._log(logging.DEBUG, 'NDBOpenIDStore: Getting OpenID nonce from datastore by key.')
-        result = key.get()
-        
-        if result:
+        if result := key.get():
             # if so, the nonce is not valid so return False
             cls._log(logging.WARNING, 'NDBOpenIDStore: Nonce was already used!')
             return False

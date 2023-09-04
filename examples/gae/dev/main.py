@@ -52,75 +52,74 @@ class Login(webapp2.RequestHandler):
     
     def login(self, provider_name):
         
-        result = authomatic.login(Webapp2Adapter(self),
-                                  provider_name,
-                                  callback=self.callback)
-        
-        if result:
+        if result := authomatic.login(
+            Webapp2Adapter(self), provider_name, callback=self.callback
+        ):
             if result.user:
-                user_response = result.user.update()
-                if user_response:
-                    self.response.write('<br /><br />status = {}<br />'.format(user_response.status))
-                
-                self.response.write('<br /><br />Hi {}<br />'.format(result.user.name))
-                self.response.write('your ID is {}<br />'.format(result.user.id))
-                self.response.write('your email is {}<br />'.format(result.user.email))
+                if user_response := result.user.update():
+                    self.response.write(f'<br /><br />status = {user_response.status}<br />')
+
+                self.response.write(f'<br /><br />Hi {result.user.name}<br />')
+                self.response.write(f'your ID is {result.user.id}<br />')
+                self.response.write(f'your email is {result.user.email}<br />')
             elif result.error:
-                self.response.write('ERROR {}<br />'.format(result.error.message))
+                self.response.write(f'ERROR {result.error.message}<br />')
         
     
     def callback(self, event):
         
         headers(self)
-        
+
         if event.error:
             self.response.write('ERROR:')
             self.response.write('<br /><br />')
-            
-            self.response.write('message: {}<br />'.format(event.error.message))
+
+            self.response.write(f'message: {event.error.message}<br />')
             for k, v in event.error.__dict__.iteritems():
-                if not k == 'message':
-                    self.response.write('{}: {}<br />'.format(k, v))
-        
+                if k != 'message':
+                    self.response.write(f'{k}: {v}<br />')
+
         elif event.user:
                 
             self.response.write('<br /><br />')
-            self.response.write('user = {}<br /><br />'.format(event.user))
-            
+            self.response.write(f'user = {event.user}<br /><br />')
+
             if event.user.credentials:
                 
                 self.response.write('<br /><br />')
                 self.response.write('Credentials:<br /><br />')
-                
+
                 for k, v in event.user.credentials.__dict__.items():
-                    self.response.write('{}: {}<br />'.format(k, v))        
-                
+                    self.response.write(f'{k}: {v}<br />')        
+
                 serialized = event.user.credentials.serialize()
-                
+
                 deserialized = authomatic.credentials(serialized)
-                
+
                 self.response.write('<br /><br />')
-                self.response.write('Serialized:<br />{}<br /><br />'.format(serialized)) 
-                self.response.write('Serialized size:<br />{} B<br /><br />'.format(sys.getsizeof(serialized)))        
-                
+                self.response.write(f'Serialized:<br />{serialized}<br /><br />')
+                self.response.write(
+                    f'Serialized size:<br />{sys.getsizeof(serialized)} B<br /><br />'
+                )        
+
                 # deserialized credentials
                 for k, v in deserialized.__dict__.items():
-                    self.response.write('{}: {}<br />'.format(k, v))
-                
+                    self.response.write(f'{k}: {v}<br />')
+
                 self.response.write('<br /><br />')
                 self.response.write('User Info:<br /><br />')
                 self.response.write('<br /><br />')
-                
+
                 event.user.update()
-                
+
             for k, v in event.user.__dict__.iteritems():
                 if k != 'data':
-                    self.response.write('{}: {}<br />'.format(k, v))
+                    self.response.write(f'{k}: {v}<br />')
                     if k == 'gae_user' and v:
                         for kk, vv in v.__dict__.iteritems():
-                            self.response.write('&nbsp;&nbsp;&nbsp;{}: {}<br />'.format(kk, vv))
-                    
-            
+                            self.response.write(f'&nbsp;&nbsp;&nbsp;{kk}: {vv}<br />')
+                                            
+
             self.response.write('<br /><br />')
             self.response.write('Raw User Info:<br /><br />')
             self.response.write(event.user.data)
@@ -129,9 +128,9 @@ class Login(webapp2.RequestHandler):
 class Test(webapp2.RequestHandler):
     def any(self):
         self.response.write('TEST:\n')
-        self.response.write('headers = {}\n'.format(self.request.headers))
-        self.response.write('params = {}\n'.format(self.request.params))
-        self.response.write('body = {}\n'.format(self.request.body))
+        self.response.write(f'headers = {self.request.headers}\n')
+        self.response.write(f'params = {self.request.params}\n')
+        self.response.write(f'body = {self.request.body}\n')
 
 
 ROUTES = [webapp2.Route(r'/auth/<:.*>', Login, 'auth', handler_method='login'),

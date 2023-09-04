@@ -16,95 +16,89 @@ class Login(webapp2.RequestHandler):
     # Accept any HTTP method and catch the "provider_name" URL variable.
     def any(self, provider_name):
                 
-        # It all begins with login.
-        result = authomatic.login(Webapp2Adapter(self), provider_name)
-        
-        # Do not write anything to the response if there is no result!
-        if result:
-            # If there is result, the login procedure is over and we can write to response.
-            self.response.write('<a href="..">Home</a>')
-            
-            if result.error:
+        if not (result := authomatic.login(Webapp2Adapter(self), provider_name)):
+            return
+        # If there is result, the login procedure is over and we can write to response.
+        self.response.write('<a href="..">Home</a>')
+
+        if result.error:
                 # Login procedure finished with an error.
-                self.response.write(u'<h2>Damn that error: {}</h2>'.format(result.error.message))
-            
-            elif result.user:
-                # Hooray, we have the user!
-                
-                # OAuth 2.0 and OAuth 1.0a provide only limited user data on login,
-                # We need to update the user to get more info.
-                if not (result.user.name and result.user.id):
-                    result.user.update()
-                
+            self.response.write(f'<h2>Damn that error: {result.error.message}</h2>')
+
+        elif result.user:
+            # Hooray, we have the user!
+
+            # OAuth 2.0 and OAuth 1.0a provide only limited user data on login,
+            # We need to update the user to get more info.
+            if not (result.user.name and result.user.id):
+                result.user.update()
+
                 # Welcome the user.
-                self.response.write(u'<h1>Hi {}</h1>'.format(result.user.name))
-                self.response.write(u'<h2>Your id is: {}</h2>'.format(result.user.id))
-                self.response.write(u'<h2>Your email is: {}</h2>'.format(result.user.email))
-                
+            self.response.write(f'<h1>Hi {result.user.name}</h1>')
+            self.response.write(f'<h2>Your id is: {result.user.id}</h2>')
+            self.response.write(f'<h2>Your email is: {result.user.email}</h2>')
+
                 # Seems like we're done, but there's more we can do...
                 
                 # If there are credentials (only by AuthorizationProvider),
                 # we can _access user's protected resources.
-                if result.user.credentials:
+            if result.user.credentials:
                     
                     # Each provider has it's specific API.
-                    if result.provider.name == 'fb':
-                        self.response.write('Your are logged in with Facebook.<br />')
-                        
-                        # We will access the user's 5 most recent statuses.
-                        url = 'https://graph.facebook.com/{}?fields=feed.limit(5)'
-                        url = url.format(result.user.id)
-                        
-                        # Access user's protected resource.
-                        response = result.provider.access(url)
-                        
-                        if response.status == 200:
-                            # Parse response.
-                            statuses = response.data.get('feed').get('data')
-                            error = response.data.get('error')
-                            
-                            if error:
-                                self.response.write(u'Damn that error: {}!'.format(error))
-                            elif statuses:
-                                self.response.write('Your 5 most recent statuses:<br />')
-                                for message in statuses:
-                                    
-                                    text = message.get('message')
-                                    date = message.get('created_time')
-                                    
-                                    self.response.write(u'<h3>{}</h3>'.format(text))
-                                    self.response.write(u'Posted on: {}'.format(date))
-                        else:
-                            self.response.write('Damn that unknown error!<br />')
-                            self.response.write(u'Status: {}'.format(response.status))
-                        
-                    if result.provider.name == 'tw':
-                        self.response.write('Your are logged in with Twitter.<br />')
-                        
-                        # We will get the user's 5 most recent tweets.
-                        url = 'https://api.twitter.com/1.1/statuses/user_timeline.json'
-                        
-                        # You can pass a dictionary of querystring parameters.
-                        response = result.provider.access(url, {'count': 5})
-                                                
+                if result.provider.name == 'fb':
+                    self.response.write('Your are logged in with Facebook.<br />')
+
+                    # We will access the user's 5 most recent statuses.
+                    url = 'https://graph.facebook.com/{}?fields=feed.limit(5)'
+                    url = url.format(result.user.id)
+
+                    # Access user's protected resource.
+                    response = result.provider.access(url)
+
+                    if response.status == 200:
                         # Parse response.
-                        if response.status == 200:
-                            if type(response.data) is list:
-                                # Twitter returns the tweets as a JSON list.
-                                self.response.write('Your 5 most recent tweets:')
-                                for tweet in response.data:
-                                    text = tweet.get('text')
-                                    date = tweet.get('created_at')
+                        statuses = response.data.get('feed').get('data')
+                        if error := response.data.get('error'):
+                            self.response.write(f'Damn that error: {error}!')
+                        elif statuses:
+                            self.response.write('Your 5 most recent statuses:<br />')
+                            for message in statuses:
                                     
-                                    self.response.write(u'<h3>{}</h3>'.format(text.replace(u'\u2013', '[???]')))
-                                    self.response.write(u'Tweeted on: {}'.format(date))
-                                    
-                            elif response.data.get('errors'):
-                                self.response.write(u'Damn that error: {}!'.\
-                                                    format(response.data.get('errors')))
-                        else:
-                            self.response.write('Damn that unknown error!<br />')
-                            self.response.write(u'Status: {}'.format(response.status))
+                                text = message.get('message')
+                                date = message.get('created_time')
+
+                                self.response.write(f'<h3>{text}</h3>')
+                                self.response.write(f'Posted on: {date}')
+                    else:
+                        self.response.write('Damn that unknown error!<br />')
+                        self.response.write(f'Status: {response.status}')
+
+                if result.provider.name == 'tw':
+                    self.response.write('Your are logged in with Twitter.<br />')
+
+                    # We will get the user's 5 most recent tweets.
+                    url = 'https://api.twitter.com/1.1/statuses/user_timeline.json'
+
+                    # You can pass a dictionary of querystring parameters.
+                    response = result.provider.access(url, {'count': 5})
+
+                        # Parse response.
+                    if response.status == 200:
+                        if type(response.data) is list:
+                            # Twitter returns the tweets as a JSON list.
+                            self.response.write('Your 5 most recent tweets:')
+                            for tweet in response.data:
+                                text = tweet.get('text')
+                                date = tweet.get('created_at')
+
+                                self.response.write(u'<h3>{}</h3>'.format(text.replace(u'\u2013', '[???]')))
+                                self.response.write(f'Tweeted on: {date}')
+
+                        elif response.data.get('errors'):
+                            self.response.write(f"Damn that error: {response.data.get('errors')}!")
+                    else:
+                        self.response.write('Damn that unknown error!<br />')
+                        self.response.write(f'Status: {response.status}')
 
 
 # Create a home request handler just that you don't have to enter the urls manually.

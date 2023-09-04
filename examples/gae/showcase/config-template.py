@@ -3,6 +3,7 @@
 Keys with leading underscore are our custom provider-specific data.
 """
 
+
 from authomatic.providers import oauth2, oauth1, openid, gaeopenid
 import authomatic
 import copy
@@ -35,7 +36,7 @@ OAUTH1 = {
             'Get your privileges': ('GET', 'https://api.bitbucket.org/1.0/user/privileges'),
         }
     },
-    
+
     'flickr': {
         'class_': oauth1.Flickr,
         'consumer_key': '##########',
@@ -46,14 +47,14 @@ OAUTH1 = {
             'List your comments': ('GET', 'http://api.flickr.com/services/rest?method=flickr.activity.userComments&format=json'),
         },
     },
-    
+
     'meetup': {
          'class_': oauth1.Meetup,
          'consumer_key': '##########',
          'consumer_secret': '##########',
            'id': authomatic.provider_id(),
     },
-    
+
     'plurk': {
         'class_': oauth1.Plurk,
         'consumer_key': '##########',
@@ -64,7 +65,7 @@ OAUTH1 = {
             'Plurk something': ('POST', 'http://www.plurk.com/APP/Timeline/plurkAdd?qualifier=says&content={message}'),
         }
     },
-    
+
     'twitter': {
         'class_': oauth1.Twitter,
         'consumer_key': '##########',
@@ -75,7 +76,7 @@ OAUTH1 = {
             'Post a tweet': ('POST', 'https://api.twitter.com/1.1/statuses/update.json?status={message}', 'Message', 'Have you got a bandage?'),
         },
     },
-    
+
     'tumblr': {
         'class_': oauth1.Tumblr,
         'consumer_key': '##########',
@@ -86,7 +87,7 @@ OAUTH1 = {
             'Follow': ('POST', 'https://api.tumblr.com/v2/user/follow?url={message}', 'Tumblr blog URL', 'peterhudec.tumblr.com'),
         },
     },
-    
+
     'ubuntuone': {
         'class_': oauth1.UbuntuOne,
         'consumer_key': 'ubuntuone', # Ubuntu gives has the same key and secret for everyone.
@@ -97,7 +98,7 @@ OAUTH1 = {
             'Get your U1 quotas': ('GET', 'https://one.ubuntu.com/api/quota/'),
         },
     },
-    
+
     'vimeo': {
         'class_': oauth1.Vimeo,
         'consumer_key': '##########',
@@ -107,14 +108,14 @@ OAUTH1 = {
             'Get your activity': ('GET', 'http://vimeo.com/api/rest/v2?method=vimeo.activity.happenedToUser&format=json&user_id={user.id}'),
         },
     },
-    
+
     'xero': {
         'class_': oauth1.Xero,
         'consumer_key': '##########',
         'consumer_secret': '##########',
         'id': authomatic.provider_id(),
     },
-    
+
     'yahoo': {
         'class_': oauth1.Yahoo,
         'consumer_key': '##########--',
@@ -139,7 +140,7 @@ OAUTH2 = {
             'Follow a user.': ('POST', 'http://behance.net/v2/users/{message}/follow', 'Username or ID', 'peterhudec'),
         },
     },
-          
+
     'bitly': {
         'class_': oauth2.Bitly,
         'consumer_key': '##########',
@@ -151,7 +152,7 @@ OAUTH2 = {
             'Shorten a URL': ('GET', 'https://api-ssl.bitly.com/v3/shorten?longUrl={message}', 'URL', 'http://peterhudec.com'),
         },
     },
-          
+
     'cosm': {
         'class_': oauth2.Cosm,
         'consumer_key': '##########',
@@ -159,7 +160,7 @@ OAUTH2 = {
         'id': authomatic.provider_id(),
         'scope': oauth2.Cosm.user_info_scope,
     },
-          
+
     'deviantart': {
         'class_': oauth2.DeviantART,
         'consumer_key': '##########',
@@ -167,9 +168,9 @@ OAUTH2 = {
         'id': authomatic.provider_id(),
         'scope': oauth2.DeviantART.user_info_scope,
     },
-    
+
     'facebook': {
-           
+
         'class_': oauth2.Facebook,
         'consumer_key': '##########',
         'consumer_secret': '##########',
@@ -181,9 +182,9 @@ OAUTH2 = {
                                       'Enter comment', 'This app is ...'),
         },
     },
-    
+
     'foursquare': {
-           
+
         'class_': oauth2.Foursquare,
         'consumer_key': '##########',
         'consumer_secret': '##########',
@@ -194,9 +195,9 @@ OAUTH2 = {
             'Get your badges': ('GET', 'https://api.foursquare.com/v2/users/{user.id}/badges'),
         },
     },
-    
+
     'github': {
-           
+
         'class_': oauth2.GitHub,
         'consumer_key': '##########',
         'consumer_secret': '##########',
@@ -207,7 +208,7 @@ OAUTH2 = {
             'Get your watched repos': ('GET', 'https://api.github.com/user/subscriptions'),
         },
     },
-    
+
     'google': {
         'class_': oauth2.Google,
         'consumer_key': '##########',
@@ -223,7 +224,7 @@ OAUTH2 = {
             'List your YouTube playlists': ('GET', 'https://gdata.youtube.com/feeds/api/users/default/playlists?alt=json'),
         },
     },
-    
+
     'linkedin': {
         'class_': oauth2.LinkedIn,
         'consumer_key': '##########',
@@ -235,7 +236,7 @@ OAUTH2 = {
                   'List your connections': ('GET', 'https://api.linkedin.com/v1/people/~/connections'),
         },
     },
-    
+
     'paypal': {
         'class_': oauth2.PayPal,
         'consumer_key': '##########',
@@ -244,7 +245,7 @@ OAUTH2 = {
         'scope': oauth2.PayPal.user_info_scope,
         '_name': 'PayPal',
     },
-    
+
     'reddit': {
         'class_': oauth2.Reddit,
         'consumer_key': '##########',
@@ -252,7 +253,7 @@ OAUTH2 = {
         'id': authomatic.provider_id(),
         'scope': oauth2.Reddit.user_info_scope,
     },
-    
+
     'viadeo': {
         'class_': oauth2.Viadeo,
         'consumer_key': '##########',
@@ -265,7 +266,7 @@ OAUTH2 = {
             'Post a status': ('POST', 'https://api.viadeo.com/status?message={message}', 'Status', DEFAULT_MESSAGE),
         },
     },
-    
+
     'vk': {
         'class_': oauth2.VK,
         'consumer_key': '##########',
@@ -279,7 +280,7 @@ OAUTH2 = {
             'Get your friends': ('GET', 'https://api.vk.com/method/friends.get'),
         },
     },
-    
+
     'windows_live': {
         'class_': oauth2.WindowsLive,
         'consumer_key': '##########',
@@ -292,7 +293,7 @@ OAUTH2 = {
             'List your contacts': ('GET', 'https://apis.live.net/v5.0/me/contacts'),
         },
     },
-    
+
     'yammer': {
         'class_': oauth2.Yammer,
         'consumer_key': '##########',
@@ -303,7 +304,7 @@ OAUTH2 = {
           'Your feed': ('GET', 'https://www.yammer.com/api/v1/messages/my_feed.json'),
         },
     },
-    
+
     'yandex': {
         'class_': oauth2.Yandex,
         'consumer_key': '##########',
@@ -313,9 +314,6 @@ OAUTH2 = {
     },
 }
 
-# Concatenate the configs.
-config = copy.deepcopy(OAUTH1)
-config.update(OAUTH2)
-config.update(AUTHENTICATION)
+config = copy.deepcopy(OAUTH1) | OAUTH2 | AUTHENTICATION
 config['__defaults__'] = DEFAULTS
 
